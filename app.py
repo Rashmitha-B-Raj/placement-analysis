@@ -367,7 +367,12 @@ qa_bank = build_qa_bank()
 # Main App Content (only if logged in)
 # -------------------------------
 if st.session_state.logged_in:
-    tab1, tab2, tab3 = st.tabs(["🧑 Student Entry", "👩‍🏫 Teacher Upload", "🤖 AI Tutor"])
+    # ✅ Define all four tabs here
+    tab1, tab2, tab3 = st.tabs([
+    "🧑 Student Entry", 
+    "👩‍🏫 Teacher Upload", 
+    "📄 Resume Builder & ATS Analyzer"
+])
 
     # -------------------------------
     # Tab 1: Student Entry
@@ -552,96 +557,84 @@ if st.session_state.logged_in:
         else:
             st.info("Upload a CSV file containing student records. Expected columns include CGPA, Branch, Skills/Aptitude/Communication or similar. The app will attempt to preprocess automatically.")
 
-    # -------------------------------
-    # Tab 3: AI Tutor
+       # -------------------------------
+    # Tab 3: Resume Builder & ATS Analyzer
     # -------------------------------
     with tab3:
-        st.header("AI Career Tutor")
-        st.write("Ask career, interview, resume, or skill-related questions. Try: 'Tell me about data analytics', 'How to prepare for interviews', 'Compare data analyst vs data scientist'.")
+        st.header("📄 Resume Builder & ATS Analyzer")
 
-        question = st.text_input("Ask your career or interview question:")
-        # Provide quick suggestion buttons
-        suggestions = st.columns(5)
-        sample_qs = [
-            "data analytics", "cloud computing", "cybersecurity",
-            "ai ml", "resume", "interview", "aptitude", "soft skills",
-            "emerging tech", "career paths"
-        ]
-        for i, s in enumerate(sample_qs[:5]):
-            if suggestions[i].button(s.title()):
-                question = s
+        uploaded_resume = st.file_uploader("Upload your resume (TXT or PDF)", type=["txt", "pdf"])
+        if uploaded_resume is not None:
+            try:
+                # Extract text from resume
+                resume_text = ""
+                if uploaded_resume.type == "application/pdf":
+                    import PyPDF2
+                    reader = PyPDF2.PdfReader(uploaded_resume)
+                    for page in reader.pages:
+                        resume_text += page.extract_text() + "\n"
+                else:
+                    resume_text = uploaded_resume.read().decode("utf-8")
 
-        if st.button("Get Answer"):
-            q = (question or "").lower().strip()
-            if not q:
-                st.info("Type a question or choose a suggestion.")
-            else:
-                found = False
-                for key, content in qa_bank.items():
-                    if key in q:
-                        found = True
-                        st.subheader(key.title())
-                        st.write(content["answer"])
+                st.subheader("Resume Preview")
+                st.text_area("Extracted Resume Text", resume_text, height=200)
 
-                        # Comparison table
-                        if isinstance(content.get("comparison"), pd.DataFrame):
-                            st.write("📑 Comparison:")
-                            st.table(content["comparison"])
+                # ATS keyword list (expandable based on job trends)
+                ats_keywords = [
+                    "Python", "SQL", "Machine Learning", "Data Analysis", "Communication",
+                    "Internship", "Project", "Cloud", "Cybersecurity", "Leadership"
+                ]
+                missing_keywords = [kw for kw in ats_keywords if kw.lower() not in resume_text.lower()]
+                present_keywords = [kw for kw in ats_keywords if kw.lower() in resume_text.lower()]
 
-                        # Visualization
-                        if isinstance(content.get("viz"), pd.DataFrame):
-                            st.write("📈 Visualization:")
-                            viz_df = content["viz"].copy()
-                            # Use first column as index for chart if possible
-                            try:
-                                idx_col = viz_df.columns[0]
-                                st.bar_chart(viz_df.set_index(idx_col))
-                            except Exception:
-                                st.bar_chart(viz_df)
+                # Resume scoring system
+                score = 100
+                if missing_keywords:
+                    score -= len(missing_keywords) * 5
+                word_count = len(resume_text.split())
+                if word_count < 150:
+                    score -= 10
+                elif word_count > 600:
+                    score -= 10
 
-                        # Extra: provide actionable steps
-                        if key == "data analytics":
-                            st.write("🔧 Actionable steps:")
-                            st.write("- Learn SQL and Python; practice with real datasets.")
-                            st.write("- Build dashboards with Tableau or Power BI.")
-                            st.write("- Complete 2-3 end-to-end projects and add them to your resume.")
-                        elif key == "interview":
-                            st.write("🔧 Actionable steps:")
-                            st.write("- Practice coding problems daily (1-2 hours).")
-                            st.write("- Prepare 5 STAR stories for behavioral rounds.")
-                            st.write("- Mock interviews with peers or platforms.")
-                        elif key == "resume":
-                            st.write("🔧 Actionable steps:")
-                            st.write("- Keep it to 1 page (for freshers).")
-                            st.write("- Use bullet points with metrics (e.g., 'Improved X by 20%').")
-                            st.write("- Tailor resume for each job description.")
-                        break
+                st.subheader("ATS Resume Score")
+                st.progress(score / 100)
+                st.info(f"Your resume scored {score}/100 based on ATS checks.")
 
-                if not found:
-                    # Try keyword matching across topics
-                    matched = False
-                    for key in qa_bank.keys():
-                        if any(word in q for word in key.split()):
-                            matched = True
-                            content = qa_bank[key]
-                            st.subheader(key.title())
-                            st.write(content["answer"])
-                            if isinstance(content.get("comparison"), pd.DataFrame):
-                                st.write("📑 Comparison:")
-                                st.table(content["comparison"])
-                            if isinstance(content.get("viz"), pd.DataFrame):
-                                st.write("📈 Visualization:")
-                                viz_df = content["viz"].copy()
-                                try:
-                                    idx_col = viz_df.columns[0]
-                                    st.bar_chart(viz_df.set_index(idx_col))
-                                except Exception:
-                                    st.bar_chart(viz_df)
-                            break
+                # Keyword coverage visualization
+                coverage_data = pd.DataFrame({
+                    "Keywords": ["Present", "Missing"],
+                    "Count": [len(present_keywords), len(missing_keywords)]
+                })
+                st.subheader("Keyword Coverage")
+                st.bar_chart(coverage_data.set_index("Keywords"))
 
-                    if not matched:
-                        st.write("🤝 General advice: Build strong communication skills, gain internship experience, and practice coding challenges.")
-                        st.write("You can ask about: data analytics, cloud computing, cybersecurity, AI/ML, resume tips, interview prep, aptitude tests, soft skills, emerging tech, or career paths.")
+                # Feedback on keywords
+                if missing_keywords:
+                    st.error(f"⚠️ Missing important keywords: {', '.join(missing_keywords)}")
+                else:
+                    st.success("✅ Your resume contains all the essential ATS keywords!")
+
+                # Formatting feedback
+                if word_count < 150:
+                    st.warning("Your resume seems too short. Add more details about projects and achievements.")
+                elif word_count > 600:
+                    st.warning("Your resume seems too long. Keep it concise (1–2 pages).")
+                else:
+                    st.info("Resume length looks good.")
+
+                # Suggestions with examples
+                st.subheader("Suggestions for Improvement")
+                st.write("🔹 **Problem: Missing Keywords** → Example Fix: If 'Machine Learning' is missing, add a project line like: *'Built a machine learning model to predict student placements with 85% accuracy.'*")
+                st.write("🔹 **Problem: Too Short** → Example Fix: Expand project descriptions: *'Developed a web app using Python and SQL to manage student records, improving efficiency by 30%.'*")
+                st.write("🔹 **Problem: Too Long** → Example Fix: Remove filler lines: Instead of *'I am a hardworking student'*, write *'Completed 3 internships in data analytics and cloud computing.'*")
+                st.write("🔹 **Problem: Weak Formatting** → Example Fix: Use bullet points:\n- Internship at XYZ Corp (2025)\n- Built predictive model in Python\n- Improved accuracy by 15%")
+                st.write("🔹 **Problem: Missing Achievements** → Example Fix: Add measurable results: *'Led a team of 4 to develop a cybersecurity dashboard, reducing incident response time by 20%.'*")
+
+            except Exception as e:
+                st.error(f"⚠️ Error analyzing resume: {e}")
+        else:
+            st.info("Upload a resume file to get instant ATS feedback and improvement suggestions.")
 
 else:
     st.info("Please login or register from the sidebar to access the app.")
